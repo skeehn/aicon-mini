@@ -1,0 +1,24 @@
+{
+  "queries": [
+    {
+      "query": "Current GDPR stance of ZYX after 2023, who signed, actions?",
+      "gold": ["gdpr-v2", "gdpr-v2-dup"]
+    },
+    {
+      "query": "Find document ARG-2024-1847 build error E1847 fix",
+      "gold": ["build-err"]
+    },
+    {
+      "query": "erasure pipelining retained ZYX",
+      "gold": ["gdpr-v2", "gdpr-v2-dup"]
+    },
+    {
+      "query": "Cluster quota shards current value",
+      "gold": ["fact-b"]
+    },
+    {
+      "query": "citation graph novelty GraphSAGE semantic map",
+      "gold": ["paper"]
+    }
+  ]
+}
