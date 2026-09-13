@@ -57,13 +57,12 @@ func cid(src, text string, t int64) string {
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%s", src, t, text)))
 	return hex.EncodeToString(h[:])[:12]
 }
-func vecOf(t []string) []float32 {
+func vecOfHash(t []string) []float32 {
 	v := make([]float32, dim)
 	for _, w := range t {
 		h := sha256.Sum256([]byte(w))
 		i := int(h[0])<<8 | int(h[1])
 		v[i%dim] += 1
-		// trigram smear for paraphrase robustness
 		if len(w) > 4 {
 			for j := 0; j+3 <= len(w) && j < 3; j++ {
 				h2 := sha256.Sum256([]byte(w[j : j+3]))
@@ -81,7 +80,14 @@ func vecOf(t []string) []float32 {
 	}
 	return v
 }
+
+func vecOf(t []string) []float32 {
+	return vecOfHash(t)
+}
 func cos(a, b []float32) float64 {
+	if len(a) != len(b) {
+		return 0
+	}
 	var s float64
 	for i := range a {
 		s += float64(a[i] * b[i])
@@ -144,7 +150,8 @@ func (s *Store) Ingest(src, text, prov string, t int64) []string {
 			prev = id
 			continue
 		}
-		u := &Unit{ID: id, Src: src, Text: c, Prov: prov, Tok: tk, Vec: vecOf(tk), Ntok: len(tk), Time: t}
+		vec := vecForDoc(c)
+		u := &Unit{ID: id, Src: src, Text: c, Prov: prov, Tok: tk, Vec: vec, Ntok: len(tk), Time: t}
 		s.U = append(s.U, u)
 		s.ByID[id] = u
 		seen := map[string]bool{}
@@ -231,7 +238,7 @@ func afterYear(q string) int64 {
 // search: decompose -> BM25+dense -> RRF -> beam graph -> MMR-knap budget
 func (s *Store) Search(query string, budget, k int) []Hit {
 	qt := tok(query)
-	qv := vecOf(qt)
+	qv := vecForQuery(query)
 	ay := afterYear(query)
 	alive := func(u *Unit) bool { return !s.Tomb[u.ID] && (ay == 0 || u.Time >= ay) }
 	type rs struct {
@@ -498,7 +505,7 @@ func toks(h []Hit) int {
 }
 func rankOnly(s *Store, q string, mode string, budget, k int) []Hit {
 	qt := tok(q) // naive RAG baseline: no temporal decompose, no tombstones
-	qv := vecOf(qt)
+	qv := vecForQuery(q)
 	var all []Hit
 	for _, u := range s.U {
 		var sc float64
