@@ -1,0 +1,42 @@
+{
+  "latency": {
+    "ttft_p50": 850,
+    "ttft_p99": 1530,
+    "tpot_p50": 20,
+    "tpot_p99": 30
+  },
+  "throughput": {
+    "tok_per_sec": 8000,
+    "goodput_req_s": 112.5
+  },
+  "cache": {
+    "hit_rate": 0.72,
+    "semantic_hit_rate": 0.18,
+    "hkvd_fraction": 0.065
+  },
+  "specdec": {
+    "acceptance_rate": 0.68,
+    "speedup": 1.42
+  },
+  "pd": {
+    "kv_transfer_ms": 8,
+    "goodput_speedup": 2.5
+  },
+  "turboquant": {
+    "compression_ratio": 2.1,
+    "quality_loss_f1": 0.012
+  },
+  "quality": {
+    "f1": 0.91,
+    "rouge_l": 0.88,
+    "correctness": 0.92
+  },
+  "cost": {
+    "per_1m_tokens": 1.8,
+    "per_query": 0.0021
+  },
+  "system": {
+    "gpu_mem_mb": 42000,
+    "cpu_util": 0.65
+  }
+}
