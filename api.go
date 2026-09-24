@@ -79,6 +79,11 @@ func lastUserMsg(msgs []ChatMessage) (int, string) {
 }
 
 func (ap *API) buildContext(sessionID, query string, budget int) (string, []string, int) {
+	dup := os.Getenv("SANDWICH") != "0"
+	return ap.AssembleForModel(sessionID, query, budget, dup)
+}
+
+func (ap *API) buildContextLegacy(sessionID, query string, budget int) (string, []string, int) {
 	if budget <= 0 {
 		budget = 1024
 	}

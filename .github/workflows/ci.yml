@@ -28,6 +28,7 @@ jobs:
       - run: go run . taskeval
       - run: go run . bencheval
       - run: go run . needle
+      - run: go run . needlelive
 
       # coverage
       - run: go tool cover -func=cover.out | grep total

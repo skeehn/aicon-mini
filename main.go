@@ -805,6 +805,9 @@ func main() {
 	if arg == "needle" {
 		os.Exit(runNeedleEval())
 	}
+	if arg == "needlelive" {
+		os.Exit(runNeedleLive())
+	}
 	if arg == "persistbench" {
 		os.Exit(runPersistBench())
 	}

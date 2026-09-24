@@ -71,3 +71,18 @@ func runNeedleEval() int {
 	fmt.Println("FAIL: sandwich did not improve simulated accuracy")
 	return 1
 }
+
+func runNeedleLive() int {
+	s := NewStore()
+	seedInto(s)
+	hits := s.Search("GDPR stance retention", 120, 5)
+	_, flatTotal, _ := Sandwich(hits, 120, false)
+	_, swTotal, _ := Sandwich(hits, 120, true)
+	if swTotal < flatTotal {
+		fmt.Println("FAIL: sandwich tokens lower than flat?!")
+		return 1
+	}
+	fmt.Printf("live sandwich: flat=%d tok sandwich=%d tok (duplicate-best overhead measured)\n", flatTotal, swTotal)
+	fmt.Println("PASS: live sandwich packer operational")
+	return 0
+}

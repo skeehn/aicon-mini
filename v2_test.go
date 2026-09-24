@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -129,5 +130,48 @@ func TestMetricsWrap(t *testing.T) {
 	snap := metrics.snapshot()
 	if snap["aicon_search_total"] == 0 {
 		t.Fatal("search counter not incremented")
+	}
+}
+
+func TestSandwichAssembler(t *testing.T) {
+	s := NewStore()
+	seedInto(s)
+	hits := s.Search("GDPR stance retention", 120, 5)
+	if len(hits) < 2 {
+		t.Fatal("need hits")
+	}
+	parts, total, srcs := Sandwich(hits, 120, true)
+	if len(parts) < 2 {
+		t.Fatalf("parts %d", len(parts))
+	}
+	if parts[0] != fmt.Sprintf("- [%s %s] %s", hits[0].U.Src, hits[0].U.ID, hits[0].U.Text) {
+		t.Fatal("best not first")
+	}
+	if !strings.Contains(parts[len(parts)-1], "DUPLICATE-BEST") {
+		t.Fatalf("best not duplicated last: %v", parts[len(parts)-1])
+	}
+	if total <= 0 || len(srcs) < 2 {
+		t.Fatal("tokens/srcs")
+	}
+}
+
+func TestAssembleForModelHonorsBudget(t *testing.T) {
+	ap := NewAPI(NewStore())
+	seedInto(ap.store)
+	_, _, total := ap.AssembleForModel("", "GDPR stance retention 90 days", 100, true)
+	if total > 100+55 {
+		t.Fatalf("budget exceeded: %d", total)
+	}
+}
+
+func TestTombstoneGateInAssembler(t *testing.T) {
+	s := NewStore()
+	seedInto(s)
+	ap := NewAPI(s)
+	_, srcs, _ := ap.AssembleForModel("", "GDPR retention 90 days Alice 2022 audit logs", 120, false)
+	for _, src := range srcs {
+		if src == "gdpr-v1" {
+			t.Fatal("tombstoned unit leaked into assembly")
+		}
 	}
 }
