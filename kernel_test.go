@@ -283,6 +283,9 @@ func TestHandleChatRejectsBadInput(t *testing.T) {
 }
 
 func TestParallelLoadKernelAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("load test skipped in -short mode")
+	}
 	s := NewStore()
 	seedInto(s)
 	ap := NewAPI(s)

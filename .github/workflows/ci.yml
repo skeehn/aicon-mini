@@ -17,14 +17,17 @@ jobs:
       - run: go mod download
 
       # unit-tests
-      - run: go test -v -coverprofile=cover.out
+      - run: go test -short -v -coverprofile=cover.out
 
       # build binary
       - run: go build -o main
 
       # demo + harness
       - run: go run . demo
-      - run: go run . eval > hybrid.tsv
+      - run: go run . eval
+      - run: go run . taskeval
+      - run: go run . bencheval
+      - run: go run . needle
 
       # coverage
       - run: go tool cover -func=cover.out | grep total
