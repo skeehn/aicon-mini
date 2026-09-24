@@ -264,8 +264,12 @@ func RunHTTPServer(addr string) {
 	ap.storePath = storePath
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", ap.handleHealth)
-	mux.HandleFunc("/v1/chat/completions", ap.handleChat)
-	mux.HandleFunc("/ingest", ap.handleIngest)
+	mux.HandleFunc("/v1/chat/completions", metricsWrap(ap.handleChat))
+	mux.HandleFunc("/ingest", metricsWrapIngest(ap.handleIngest))
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.Write([]byte(renderMetrics(metrics.snapshot())))
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			w.Header().Set("Content-Type", "application/json")
@@ -291,7 +295,11 @@ func RunHTTPServer(addr string) {
 			}
 		}()
 	}
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	final := http.Handler(mux)
+	if tokEnv := os.Getenv("TOKEN"); tokEnv != "" {
+		final = authWrap(mux, true, tokEnv)
+	}
+	if err := http.ListenAndServe(addr, final); err != nil {
 		fmt.Fprintln(os.Stderr, "server:", err)
 		os.Exit(1)
 	}

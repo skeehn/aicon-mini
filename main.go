@@ -30,15 +30,16 @@ type Rel struct {
 	W       float64
 }
 type Store struct {
-	mu   sync.RWMutex
-	U    []*Unit
-	ByID map[string]*Unit
-	DF   map[string]int
-	Avg  float64
-	Adj  map[string][]Rel
-	Tomb map[string]bool
-	Sup  map[string]string
-	N    int
+	Assoc *AssocIdx
+	mu    sync.RWMutex
+	U     []*Unit
+	ByID  map[string]*Unit
+	DF    map[string]int
+	Avg   float64
+	Adj   map[string][]Rel
+	Tomb  map[string]bool
+	Sup   map[string]string
+	N     int
 }
 type Hit struct {
 	U     *Unit
@@ -47,8 +48,70 @@ type Hit struct {
 }
 
 func NewStore() *Store {
-	return &Store{ByID: map[string]*Unit{}, DF: map[string]int{}, Adj: map[string][]Rel{}, Tomb: map[string]bool{}, Sup: map[string]string{}}
+	return &Store{ByID: map[string]*Unit{}, DF: map[string]int{}, Adj: map[string][]Rel{}, Tomb: map[string]bool{}, Sup: map[string]string{}, Assoc: NewAssocIdx()}
 }
+
+func (s *Store) AssocPool() *AssocIdx  { return s.Assoc }
+func (s *Store) AssocInit(a *AssocIdx) { a.N = len(s.U) }
+
+func (s *Store) rankCombined(query string, budget, k int) []Hit {
+	qt := tok(query)
+	ext := s.Assoc.Expand(qt, 6)
+	q2 := query
+	for _, e := range ext {
+		q2 += " " + e
+	}
+	qt2 := tok(q2)
+	qv := vecForQuery(query)
+	var rsb, rsd []struct {
+		u    *Unit
+		b, d float64
+	}
+	for _, u := range s.U {
+		if s.Tomb[u.ID] {
+			continue
+		}
+		rsb = append(rsb, struct {
+			u    *Unit
+			b, d float64
+		}{u, s.bm25(qt2, u), 0})
+		rsd = append(rsd, struct {
+			u    *Unit
+			b, d float64
+		}{u, 0, cos(qv, u.Vec)})
+	}
+	sort.Slice(rsb, func(i, j int) bool { return rsb[i].b > rsb[j].b })
+	sort.Slice(rsd, func(i, j int) bool { return rsd[i].d > rsd[j].d })
+	rank := map[string][2]int{}
+	for i, r := range rsb {
+		v := rank[r.u.ID]
+		v[0] = i + 1
+		rank[r.u.ID] = v
+	}
+	for i, r := range rsd {
+		v := rank[r.u.ID]
+		v[1] = i + 1
+		rank[r.u.ID] = v
+	}
+	const K = 60.0
+	rrf := map[string]float64{}
+	for id, r := range rank {
+		rrf[id] = 0.5/(K+float64(r[0])) + 0.5/(K+float64(r[1]))
+	}
+	var all []Hit
+	for id, f := range rrf {
+		u := s.ByID[id]
+		all = append(all, Hit{u, f * 100, "combined"})
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].Score > all[j].Score })
+	if len(all) > k {
+		all = all[:k]
+	}
+	return all
+}
+
+// SearchBasic: single-shot rank+assemble (the v1 pipeline).
+// Search: v2 - CorpusPRF-expanded single-shot + ChainHop multi-hop + assembler.
 func tok(s string) []string {
 	s = strings.ToLower(s)
 	f := func(r rune) bool {
@@ -148,6 +211,7 @@ func (s *Store) Ingest(src, text, prov string, t int64) []string {
 }
 
 func (s *Store) ingestLocked(src, text, prov string, t int64) []string {
+	defer func() { s.Assoc.N = len(s.U) }()
 	var ids []string
 	cs := chunks(text)
 	var prev string
@@ -161,6 +225,7 @@ func (s *Store) ingestLocked(src, text, prov string, t int64) []string {
 		}
 		vec := vecForDoc(c)
 		u := &Unit{ID: id, Src: src, Text: c, Prov: prov, Tok: tk, Vec: vec, Ntok: len(tk), Time: t}
+		defer s.Assoc.Update(tk, s.DF)
 		s.U = append(s.U, u)
 		s.ByID[id] = u
 		seen := map[string]bool{}
@@ -244,8 +309,60 @@ func afterYear(q string) int64 {
 	return 0
 }
 
-// search: decompose -> BM25+dense -> RRF -> beam graph -> MMR-knap budget
+func (s *Store) assembleRound(q string, hits []Hit, budget, k int) []Hit {
+	qt := tok(q)
+	qv := vecForQuery(q)
+	var all []Hit
+	for _, h := range hits {
+		u := h.U
+		ov := 0.0
+		set := map[string]bool{}
+		for _, w := range u.Tok {
+			set[w] = true
+		}
+		for _, w := range qt {
+			if set[w] {
+				ov++
+			}
+		}
+		if len(qt) > 0 {
+			ov /= float64(len(qt))
+		}
+		sc := 0.6*h.Score + 0.2*cos(qv, u.Vec)*100 + 0.1*ov*100 + auth(u)
+		all = append(all, Hit{u, sc, h.Why})
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].Score > all[j].Score })
+	var sel []Hit
+	used := 0
+	for _, h := range all {
+		if len(sel) >= k || used+h.U.Ntok > budget {
+			continue
+		}
+		mx := 0.0
+		for _, p := range sel {
+			if c := cos(h.U.Vec, p.U.Vec); c > mx {
+				mx = c
+			}
+		}
+		if mx > 0.85 {
+			continue
+		}
+		if s.Tomb[h.U.ID] {
+			continue
+		}
+		sel = append(sel, h)
+		used += h.U.Ntok
+	}
+	return sel
+}
+
+// SearchBasic: decompose -> BM25+dense -> RRF -> beam graph -> MMR-knap budget.
+// Search: v2 - ChainHop iterative expansion + assembler packing.
 func (s *Store) Search(query string, budget, k int) []Hit {
+	return s.ChainHop(query, budget, k)
+}
+
+func (s *Store) SearchBasic(query string, budget, k int) []Hit {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	qt := tok(query)
@@ -285,8 +402,14 @@ func (s *Store) Search(query string, budget, k int) []Hit {
 			maxIDF = idf
 		}
 	}
+	embeddingMode := embeddingProvider()
 	w1, w2 := 0.45, 0.45
-	if maxIDF > 2.2 {
+	if embeddingMode == "hash" {
+		w1, w2 = 0.92, 0.03
+		if maxIDF > 1.8 {
+			w1, w2 = 0.97, 0.02
+		}
+	} else if maxIDF > 2.2 {
 		w1, w2 = 0.62, 0.28
 	} else if maxIDF < 1.0 {
 		w1, w2 = 0.28, 0.62
@@ -356,7 +479,13 @@ func (s *Store) Search(query string, budget, k int) []Hit {
 		if len(qt) > 0 {
 			ov /= float64(len(qt))
 		}
-		sc := 0.55*f*100 + 0.25*cos(qv, u.Vec) + 0.15*ov + graph[id] + auth(u) + 0.005*float64(u.Time-2020)
+		denseW := 0.25
+		recency := 0.005 * float64(u.Time-2020)
+		if embeddingProvider() == "hash" {
+			recency *= 0.2
+			graph[id] *= 0.5
+		}
+		sc := 0.55*f*100 + denseW*cos(qv, u.Vec) + 0.15*ov + graph[id] + auth(u) + recency
 		all = append(all, Hit{u, sc, fmt.Sprintf("rrf=%.4f dense=%.2f ov=%.2f g=%.3f", f, cos(qv, u.Vec), ov, graph[id])})
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Score > all[j].Score })
@@ -393,6 +522,24 @@ func (s *Store) Search(query string, budget, k int) []Hit {
 		return sel[i].U.ID < sel[j].U.ID
 	})
 	return sel
+}
+
+// bm25Top1 returns the strongest BM25-raw unit for the query (used as a pin to
+// keep the top-1 lexical anchor inside the pack under MMR dedupe).
+func (s *Store) bm25Top1(qt []string) string {
+	best := ""
+	bs := -1e18
+	for _, u := range s.U {
+		if s.Tomb[u.ID] {
+			continue
+		}
+		sc := s.bm25(qt, u)
+		if sc > bs {
+			bs = sc
+			best = u.ID
+		}
+	}
+	return best
 }
 
 func auth(u *Unit) float64 {
@@ -652,12 +799,29 @@ func main() {
 	if arg == "taskeval" {
 		os.Exit(runTaskEval())
 	}
+	if arg == "bencheval" {
+		os.Exit(runBenchEvalCmd())
+	}
+	if arg == "needle" {
+		os.Exit(runNeedleEval())
+	}
+	if arg == "persistbench" {
+		os.Exit(runPersistBench())
+	}
 	if arg == "mcp" {
 		RunMCPServer()
 		return
 	}
 	if arg == "serve" {
 		addr := ":8080"
+		if a := os.Getenv("ADDR"); a != "" {
+			addr = a
+		}
+		RunHTTPServer(addr)
+		return
+	}
+	if arg == "serveauth" {
+		addr := ":8081"
 		if a := os.Getenv("ADDR"); a != "" {
 			addr = a
 		}

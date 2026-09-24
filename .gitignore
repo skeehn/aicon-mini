@@ -1,4 +1,12 @@
+aiconmini
+aicon.db
+*.db
+pb-*
+needle_report.json
 benchmark_results.json
 cover.out
 main
 .DS_Store
+eval_report.json
+bench_report.json
+containment.json

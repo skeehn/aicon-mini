@@ -315,3 +315,47 @@ func TestSnapshotFileOnDisk(t *testing.T) {
 		t.Fatal("load failed")
 	}
 }
+
+func TestSQLiteRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSQLite(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s := NewStore()
+	seedInto(s)
+	for _, u := range s.U {
+		if err := db.IngestUnit(u, false, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Tombstone(seedV1ID(s), ""); err != nil {
+		t.Fatal(err)
+	}
+	s2 := NewStore()
+	if err := db.LoadInto(s2); err != nil {
+		t.Fatal(err)
+	}
+	if len(s2.U) != len(s.U)-1 {
+		t.Fatalf("loaded %d, expected %d", len(s2.U), len(s.U)-1)
+	}
+	h := s2.Search("GDPR stance", 120, 3)
+	if len(h) == 0 {
+		t.Fatal("search failed after SQLite load")
+	}
+}
+
+func seedV1ID(s *Store) string {
+	for _, u := range s.U {
+		if u.Src == "gdpr-v1" {
+			return u.ID
+		}
+	}
+	return ""
+}
+
+func storePath(t *testing.T) (string, func()) {
+	p := filepath.Join(t.TempDir(), "store.json")
+	return p, func() { os.Remove(p) }
+}

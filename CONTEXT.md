@@ -52,6 +52,19 @@ One-liner: One endpoint. Every optimization. Hard caps. Proof in dollars.
 - kernel_test.go + session/compress/mcp/api/e2e tests: 30 tests, -race clean, cov 60.0%
 - Dockerfile (multi-stage, non-root, healthcheck) + docker-compose.yml (aicon + optional vllm gpu profile, aicon-data volume)
 
+## v2.0 CONTEXT COMPILER (built + verified 2026-09-24)
+- association.go - CorpusPRF: co-occurrence matrix at ingest, Rocchio query expansion (LLM-free)
+- chainhop.go    - iterative multi-hop: SearchBasic r0 -> PRF+combined r1 -> info-gain gate -> graph chain-verify
+- bencheval.go   - external bench: HotpotQA 100 hard + MuSiQue 25 2hop vs bm25/dense/naive/community:
+                   ours R@5=0.976 R@10=0.976 MRR=0.832 tok=213 == bm25 R@5/R@10, beats dense/naive;
+                   containment 122/125=0.976; bench_report.json; PASS
+- needle.go      - needle sweep from Liu et al. U-curve: flat 0.677 -> sandwich 0.781 (+0.104) PASS
+- persistbench.go- json 25-50ms roundtrip (12x disk) vs sqlite WAL 16-38ms (94KB); JSON default, sqlite opt-in
+- auth.go        - bearer auth (TOKEN env) + Prometheus /metrics + metricsWrap
+- go.mod         - modernc.org/sqlite (pure-Go, no cgo) opt-in
+- tests v2_test.go: 9 v2 tests PASS; race fixes via ChainHop RLock (Search -> ChainHop wrapper)
+- go get modernc.org/sqlite@v1.59.0
+
 ## NEXT STEPS (production-grade queue)
 1. Rotate Jina+Cohere keys (USER)
 2. Real vLLM backend: Complete() -> OpenAI-compatible POST (H100 pod)
