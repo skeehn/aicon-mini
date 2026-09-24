@@ -1,0 +1,43 @@
+services:
+  aicon:
+    build: .
+    image: aicon-mini:1.1.0
+    ports:
+      - "8080:8080"
+    environment:
+      ADDR: ":8080"
+      JINA_API_KEY: ${JINA_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      UPSTREAM_BASE_URL: ${UPSTREAM_BASE_URL:-}
+      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:-}
+      STORE_PATH: "/data/store.json"
+    volumes:
+      - aicon-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["gpu"]
+    entrypoint: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+    volumes:
+      - ${HF_CACHE:-~/.cache/huggingface}:/root/.cache/huggingface
+    environment:
+      MODEL: ${VLLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+    command: ["--model", "${VLLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}", "--port", "9000"]
+    ports:
+      - "9000:9000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  aicon-data:

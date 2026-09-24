@@ -13,6 +13,28 @@ import (
 
 var embeddingCache = map[string][]float32{}
 
+var embeddingHTTP = &http.Client{Timeout: 10 * time.Second}
+
+func httpRetry(req *http.Request, maxAttempts int) (*http.Response, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(250*(attempt*attempt)) * time.Millisecond)
+		}
+		resp, err := embeddingHTTP.Do(req)
+		if err == nil && resp.StatusCode < 500 {
+			return resp, nil
+		}
+		if err != nil {
+			lastErr = err
+		} else {
+			resp.Body.Close()
+			lastErr = &http.ProtocolError{ErrorString: "upstream 5xx " + resp.Status}
+		}
+	}
+	return nil, lastErr
+}
+
 func jinaEmbedSingle(text, apiKey string) ([]float32, error) {
 	if v, ok := embeddingCache["jina:"+text]; ok {
 		return v, nil
@@ -27,8 +49,7 @@ func jinaEmbedSingle(text, apiKey string) ([]float32, error) {
 	req, _ := http.NewRequest("POST", "https://api.jina.ai/v1/embeddings", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpRetry(req, 3)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +88,7 @@ func jinaEmbedQuery(text, apiKey string) ([]float32, error) {
 	req, _ := http.NewRequest("POST", "https://api.jina.ai/v1/embeddings", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpRetry(req, 3)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +126,7 @@ func cohereEmbedSingle(text, apiKey string) ([]float32, error) {
 	req, _ := http.NewRequest("POST", "https://api.cohere.com/v1/embed", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpRetry(req, 3)
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +162,7 @@ func cohereEmbedQuery(text, apiKey string) ([]float32, error) {
 	req, _ := http.NewRequest("POST", "https://api.cohere.com/v1/embed", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpRetry(req, 3)
 	if err != nil {
 		return nil, err
 	}

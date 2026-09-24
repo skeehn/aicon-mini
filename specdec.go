@@ -5,22 +5,22 @@ import (
 )
 
 var DraftRegistry = map[string]string{
-	"meta-llama/Llama-3.1-8B-Instruct":       "yuhuili/EAGLE3-LLaMA3.1-8B",
-	"meta-llama/Llama-3.1-70B-Instruct":      "yuhuili/EAGLE3-LLaMA3.1-70B",
-	"meta-llama/Llama-3.3-70B-Instruct":      "yuhuili/EAGLE3-LLaMA3.3-Instruct-70B",
-	"Qwen/Qwen2.5-7B-Instruct":               "yuhuili/EAGLE3-Qwen2.5-7B",
-	"Qwen/Qwen2.5-72B-Instruct":              "yuhuili/EAGLE3-Qwen2.5-72B",
-	"mistralai/Mistral-7B-Instruct-v0.3":     "yuhuili/EAGLE3-Mistral-7B",
-	"microsoft/Phi-3.5-mini-instruct":        "yuhuili/EAGLE3-Phi-3.5-mini",
-	"google/gemma-2-9b-it":                   "yuhuili/EAGLE3-Gemma-2-9B",
-	"google/gemma-2-27b-it":                  "yuhuili/EAGLE3-Gemma-2-27B",
+	"meta-llama/Llama-3.1-8B-Instruct":   "yuhuili/EAGLE3-LLaMA3.1-8B",
+	"meta-llama/Llama-3.1-70B-Instruct":  "yuhuili/EAGLE3-LLaMA3.1-70B",
+	"meta-llama/Llama-3.3-70B-Instruct":  "yuhuili/EAGLE3-LLaMA3.3-Instruct-70B",
+	"Qwen/Qwen2.5-7B-Instruct":           "yuhuili/EAGLE3-Qwen2.5-7B",
+	"Qwen/Qwen2.5-72B-Instruct":          "yuhuili/EAGLE3-Qwen2.5-72B",
+	"mistralai/Mistral-7B-Instruct-v0.3": "yuhuili/EAGLE3-Mistral-7B",
+	"microsoft/Phi-3.5-mini-instruct":    "yuhuili/EAGLE3-Phi-3.5-mini",
+	"google/gemma-2-9b-it":               "yuhuili/EAGLE3-Gemma-2-9B",
+	"google/gemma-2-27b-it":              "yuhuili/EAGLE3-Gemma-2-27B",
 }
 
 type SpecConfig struct {
-	Model                    string
-	NumSpeculativeTokens     int
-	Method                   string
-	DraftTensorParallelSize  int
+	Model                   string
+	NumSpeculativeTokens    int
+	Method                  string
+	DraftTensorParallelSize int
 }
 
 func DefaultSpecConfig(model string) SpecConfig {

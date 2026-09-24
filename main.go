@@ -12,6 +12,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const dim = 128
@@ -22,12 +23,14 @@ type Unit struct {
 	Vec                 []float32
 	Ntok                int
 	Time                int64 // year, minimal temporal signal
+	Level               int   // 0=fact, 1=summary, 2=topic
 }
 type Rel struct {
 	To, Typ string
 	W       float64
 }
 type Store struct {
+	mu   sync.RWMutex
 	U    []*Unit
 	ByID map[string]*Unit
 	DF   map[string]int
@@ -139,6 +142,12 @@ func chunks(text string) []string {
 }
 
 func (s *Store) Ingest(src, text, prov string, t int64) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ingestLocked(src, text, prov, t)
+}
+
+func (s *Store) ingestLocked(src, text, prov string, t int64) []string {
 	var ids []string
 	cs := chunks(text)
 	var prev string
@@ -237,6 +246,8 @@ func afterYear(q string) int64 {
 
 // search: decompose -> BM25+dense -> RRF -> beam graph -> MMR-knap budget
 func (s *Store) Search(query string, budget, k int) []Hit {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	qt := tok(query)
 	qv := vecForQuery(query)
 	ay := afterYear(query)
@@ -399,6 +410,8 @@ func auth(u *Unit) float64 {
 	}
 }
 func (s *Store) Inspect(id string, depth int) []*Unit {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	u, ok := s.ByID[id]
 	if !ok {
 		return nil
@@ -414,6 +427,8 @@ func (s *Store) Inspect(id string, depth int) []*Unit {
 	return out
 }
 func (s *Store) Traverse(start, typ string, depth int) []*Unit {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	seen := map[string]bool{start: true}
 	cur := []string{start}
 	var out []*Unit
@@ -436,6 +451,8 @@ func (s *Store) Traverse(start, typ string, depth int) []*Unit {
 	return out
 }
 func (s *Store) Delete(id, supBy string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Tomb[id] = true
 	if supBy != "" {
 		s.Sup[id] = supBy
@@ -449,9 +466,47 @@ func (s *Store) Delete(id, supBy string) {
 	}
 }
 
+func (s *Store) AdjLevel(id string, level int) {
+	if u, ok := s.ByID[id]; ok {
+		u.Level = level
+	}
+}
+
+// Consolidate: rare-term graph pass promoting clusters into Level-2 topic
+// units (stdlib extractive). Deterministic; called optionally by API.
+func (s *Store) Consolidate() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	units := append([]*Unit{}, s.U...)
+	n := 0
+	for _, u := range units {
+		if s.Tomb[u.ID] || u.Ntok < 12 {
+			continue
+		}
+		n0 := len(s.Adj[u.ID])
+		if n0 >= 2 {
+			var texts []string
+			for _, e := range s.Adj[u.ID] {
+				if v, ok := s.ByID[e.To]; ok && !s.Tomb[e.To] && u.Level == 0 {
+					texts = append(texts, v.Text)
+				}
+			}
+			if len(texts) >= 2 {
+				sum := summarizeExtractive(u.Text + " " + texts[0] + " " + texts[1])
+				ids := s.ingestLocked(u.Src+"-topic", sum, "topic", u.Time)
+				if len(ids) > 0 {
+					s.AdjLevel(ids[0], 2)
+					s.Adj[u.ID] = append(s.Adj[u.ID], Rel{ids[0], "summarized-by", 0.8})
+					n++
+				}
+			}
+		}
+	}
+	return n
+}
+
 // --- demo + eval harness (beats vector-only / BM25-only) ---
-func seed() *Store {
-	s := NewStore()
+func seedInto(s *Store) {
 	s.Ingest("gdpr-v1", "GDPR compliance stance of ZYX: data retention 90 days. Signed by Alice 2022. Actions: audit logs enabled.", "policy", 2022)
 	s.Ingest("gdpr-v2", "GDPR compliance stance of ZYX: data retention 30 days. Signed by Bob 2024. Actions: DPO review, tombstoned v1, erasure pipeline.", "policy", 2024)
 	s.Ingest("gdpr-v2-dup", "GDPR compliance stance of ZYX: data retention 30 days. Signed by Bob 2024. Actions: DPO review, erasure pipeline.", "mirror", 2024)
@@ -483,6 +538,11 @@ func seed() *Store {
 	if fa != "" && fb != "" {
 		s.Delete(fa, fb) // stale value superseded; compiler must prefer fb
 	}
+}
+
+func seed() *Store {
+	s := NewStore()
+	seedInto(s)
 	return s
 }
 func recallAt(gold map[string]bool, hits []Hit, at int) float64 {
@@ -504,6 +564,8 @@ func toks(h []Hit) int {
 	return t
 }
 func rankOnly(s *Store, q string, mode string, budget, k int) []Hit {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	qt := tok(q) // naive RAG baseline: no temporal decompose, no tombstones
 	qv := vecForQuery(q)
 	var all []Hit
@@ -586,6 +648,21 @@ func main() {
 	}
 	if arg == "eval" {
 		os.Exit(runEval())
+	}
+	if arg == "taskeval" {
+		os.Exit(runTaskEval())
+	}
+	if arg == "mcp" {
+		RunMCPServer()
+		return
+	}
+	if arg == "serve" {
+		addr := ":8080"
+		if a := os.Getenv("ADDR"); a != "" {
+			addr = a
+		}
+		RunHTTPServer(addr)
+		return
 	}
 	s := seed()
 	fmt.Println("== search ==")

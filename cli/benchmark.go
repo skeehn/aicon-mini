@@ -94,11 +94,11 @@ func main() {
 	fmt.Printf("\nSaved to benchmark_results.json\n")
 
 	targets := map[string]bool{
-		"TTFT speedup >=2.8x":    m.PD.GoodputSpeedup >= 1.8,
-		"HKVD 5-8%":              m.Cache.HKVDFraction >= 0.05 && m.Cache.HKVDFraction <= 0.08,
-		"SpecDec >=65%":          m.SpecDec.AcceptanceRate >= 0.65,
-		"KV compression >=1.8x":  m.TurboQuant.CompressionRatio >= 1.8,
-		"Cost $0.0015-0.003":     m.Cost.PerQuery >= 0.0015 && m.Cost.PerQuery <= 0.003,
+		"TTFT speedup >=2.8x":   m.PD.GoodputSpeedup >= 1.8,
+		"HKVD 5-8%":             m.Cache.HKVDFraction >= 0.05 && m.Cache.HKVDFraction <= 0.08,
+		"SpecDec >=65%":         m.SpecDec.AcceptanceRate >= 0.65,
+		"KV compression >=1.8x": m.TurboQuant.CompressionRatio >= 1.8,
+		"Cost $0.0015-0.003":    m.Cost.PerQuery >= 0.0015 && m.Cost.PerQuery <= 0.003,
 	}
 	fmt.Println("\nTargets vs spec:")
 	for k, v := range targets {

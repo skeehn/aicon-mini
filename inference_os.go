@@ -6,16 +6,16 @@ import (
 )
 
 type Fragment struct {
-	ID              string
-	Content         string
-	TokenCount      int
-	Enrichment      string
-	BoundariesJSON  string
-	CrossAttnScore  float64
-	Source          string
-	MetadataJSON    string
-	CreatedAt       int64
-	UpdatedAt       int64
+	ID             string
+	Content        string
+	TokenCount     int
+	Enrichment     string
+	BoundariesJSON string
+	CrossAttnScore float64
+	Source         string
+	MetadataJSON   string
+	CreatedAt      int64
+	UpdatedAt      int64
 }
 
 func enrich(content, level string) string {

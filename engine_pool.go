@@ -8,18 +8,18 @@ import (
 type EngineType string
 
 const (
-	VLLM  EngineType = "vllm"
-	MLC   EngineType = "mlc"
-	Edge  EngineType = "edge"
+	VLLM EngineType = "vllm"
+	MLC  EngineType = "mlc"
+	Edge EngineType = "edge"
 )
 
 type EngineConfig struct {
-	ModelID         string
-	Hardware        string
-	EnableSpecDec   bool
-	EnablePD        bool
+	ModelID          string
+	Hardware         string
+	EnableSpecDec    bool
+	EnablePD         bool
 	EnableTurboQuant bool
-	PDTopology      PDTopology
+	PDTopology       PDTopology
 }
 
 type UnifiedEngine struct {
@@ -70,11 +70,11 @@ func NewUnifiedEngine(cfg EngineConfig) *UnifiedEngine {
 }
 
 type CompletionResult struct {
-	Text     string
-	Headers  map[string]string
-	Latency  time.Duration
-	Tokens   int
-	Cost     float64
+	Text    string
+	Headers map[string]string
+	Latency time.Duration
+	Tokens  int
+	Cost    float64
 }
 
 func (e *UnifiedEngine) Complete(prompt, taskClass string, maxTokens int) (*CompletionResult, error) {

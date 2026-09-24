@@ -41,6 +41,17 @@ One-liner: One endpoint. Every optimization. Hard caps. Proof in dollars.
 - ci.yml: vet, test, demo, eval, cli, coverage (go 1.22)
 - Secret audit PASSED (0 keys/IPs in history after filter-branch + force-push)
 
+## v1.1 UNIVERSAL CONTEXT KERNEL (built + verified 2026-09-23)
+- session.go   - SessionManager: hot window 8 turns, rolling bounded summary (≤192 tok), episodic ingest, Forget curve, mutex-safe (race-clean under -race)
+- compress.go  - CompressLoop: longest-relevant-first eviction, extractive summary write-back as Level-1 unit
+- main.go      - Unit.Level (0 fact/1 summary/2 topic), Store.Consolidate(), RWMutex guards on Search/Inspect/Traverse/Ingest/Delete/Consolidate
+- mcp.go       - MCP stdio JSON-RPC server: 5 tools (search/ingest/inspect/compress/session_report), live smoke-tested
+- api.go       - OpenAI-compat /v1/chat/completions: retrieval injection as system msg, X-Context-* headers, UPSTREAM_BASE_URL forward, session memory, /health /ingest, STORE_PATH persistence (30s tick + save-on-ingest)
+- eval.go      - 12-task suite on noisy corpus: hybrid R@5=1.000 R@10=1.000 MRR=0.854 NDCG@5 0.302, PASS gates; eval_report.json
+- persist.go   - atomic JSON snapshot Save/LoadStoreOrSeed; E2E proven kill->restart->disk answer
+- kernel_test.go + session/compress/mcp/api/e2e tests: 30 tests, -race clean, cov 60.0%
+- Dockerfile (multi-stage, non-root, healthcheck) + docker-compose.yml (aicon + optional vllm gpu profile, aicon-data volume)
+
 ## NEXT STEPS (production-grade queue)
 1. Rotate Jina+Cohere keys (USER)
 2. Real vLLM backend: Complete() -> OpenAI-compatible POST (H100 pod)

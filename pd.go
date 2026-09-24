@@ -3,18 +3,18 @@ package main
 type PDTopology string
 
 const (
-	SingleNode      PDTopology = "single_node"
+	SingleNode       PDTopology = "single_node"
 	MultiNodePrefill PDTopology = "multi_prefill"
 	MultiNodeDecode  PDTopology = "multi_decode"
 	HybridTopology   PDTopology = "hybrid"
 )
 
 type KVTransferConfig struct {
-	KVConnector    string `json:"kv_connector"`
-	KVRole         string `json:"kv_role"`
-	KVBufferSize   string `json:"kv_buffer_size"`
-	PrefillOnly    bool   `json:"prefill_only,omitempty"`
-	DecodeOnly     bool   `json:"decode_only,omitempty"`
+	KVConnector  string `json:"kv_connector"`
+	KVRole       string `json:"kv_role"`
+	KVBufferSize string `json:"kv_buffer_size"`
+	PrefillOnly  bool   `json:"prefill_only,omitempty"`
+	DecodeOnly   bool   `json:"decode_only,omitempty"`
 }
 
 func PrefillConfig(connector string) KVTransferConfig {

@@ -27,10 +27,10 @@ func DefaultTurboQuantConfig() TurboQuantConfig {
 }
 
 type QuantMetrics struct {
-	OriginalBytes   int
-	CompressedBytes int
+	OriginalBytes    int
+	CompressedBytes  int
 	CompressionRatio float64
-	F1Loss          float64
+	F1Loss           float64
 }
 
 func EstimateTurboQuantCompression(cfg TurboQuantConfig, seqLen, hiddenDim int) QuantMetrics {

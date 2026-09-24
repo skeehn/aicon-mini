@@ -95,10 +95,10 @@ func ScoreRoute(taskClass, model, hardware string) float64 {
 
 func EstimateCost(model string, promptTokens, completionTokens int) float64 {
 	pricing := map[string][2]float64{
-		"phi3.5:3.8b":                          {0.0001, 0.0002},
-		"llama3.2:3b":                          {0.0002, 0.0004},
-		"meta-llama/Llama-3.1-8B-Instruct":     {0.0006, 0.0012},
-		"meta-llama/Llama-3.1-70B-Instruct":    {0.0025, 0.005},
+		"phi3.5:3.8b":                       {0.0001, 0.0002},
+		"llama3.2:3b":                       {0.0002, 0.0004},
+		"meta-llama/Llama-3.1-8B-Instruct":  {0.0006, 0.0012},
+		"meta-llama/Llama-3.1-70B-Instruct": {0.0025, 0.005},
 	}
 	if p, ok := pricing[model]; ok {
 		return float64(promptTokens)/1000*p[0] + float64(completionTokens)/1000*p[1]

@@ -180,6 +180,71 @@ go test -v && go run . eval && go run ./cli  # all PASS, 2.88s, H100 81559 MiB
 
 ---
 
+
+## Universal Context Kernel (v1.1) - agents, System-1 models, any model
+
+aicon-mini v1.1 turns the SOTA retrieval engine into a **serving layer** that gives
+any AI system a functional-infinite-context memory. No model changes, no fine-tuning,
+no GPU requirement - one binary, stdlib-only Go.
+
+```bash
+go run . taskeval   # 12-task eval: R@5=1.000 R@10=1.000 MRR=0.854 tokens within 5% of BM25
+```
+
+### Architecture: hierarchical memory + recyclable context
+
+```
+                  ┌── MCP server (stdio)      → Claude / Cursor / any MCP client
+                  ├── OpenAI-compat /v1       → any model server, curl, SDKs
+  KERNEL ─────────┤
+                  ├── HTTP /health /ingest    → ops
+                  └── Go library              → embedded agents
+
+  MEMORY LAYERS (per session):
+    Layer 0  hot window       last 8 turns verbatim, relevance-packed under budget
+    Layer 1  rolling summary  extractive, bounded ≤192 tok, longest-relevant-first
+                              eviction, re-summarized every compaction
+    Layer 2  episodic units   consolidations auto-ingested (CAS, tombstonable)
+    Forget   forget-curve     consolidations >3 superseded sessions tombstoned
+    Persist  JSON snapshot    atomic save, reload on boot, survives restart
+```
+
+### MCP: `go run . mcp`
+
+Five tools with token budgets enforced per call:
+| Tool | What it does |
+|------|--------------|
+| `context_search` | hybrid BM25+dense+graph, returns packed hits + provenance + breakdown |
+| `context_ingest` | auto-chunk, CAS dedupe, returns unit ids |
+| `context_inspect` | unit + 1-hop neighbors + tombstone state |
+| `context_compress` | longest-relevant-first packing + extractive write-back (Level-1 unit) |
+| `context_session_report` | packed context for a query + memory stats |
+
+```bash
+printf '%s\n%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+'{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | go run . mcp
+```
+
+### OpenAI-compatible endpoint: `go run . serve`
+
+```bash
+curl -X POST localhost:8080/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"What is our GDPR stance after 2023?"}],"session_id":"s1"}'
+```
+
+Response headers **prove** what was injected:
+`X-Context-Sources=gdpr-v2,fact-b · X-Context-Tokens=81 · X-Context-Injection-Ms=0.18`
+
+With `UPSTREAM_BASE_URL=http://vllm:9000` the kernel forwards to any
+OpenAI-compatible server (vLLM/Ollama/OpenAI) with the retrieved context injected
+as a system message - the context layer is model-agnostic.
+
+### Storage: `STORE_PATH=/data/store.json`
+Atomic JSON snapshots (stdlib). Proven E2E: ingest → kill -9 → restart → the
+ingested fact is answered from disk. Session memory persists across restarts.
+
+---
+
 ## How It Works
 
 ### Hybrid Retrieval
