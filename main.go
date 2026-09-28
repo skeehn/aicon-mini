@@ -365,6 +365,11 @@ func (s *Store) Search(query string, budget, k int) []Hit {
 func (s *Store) SearchBasic(query string, budget, k int) []Hit {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.SearchBasicLocked(query, budget, k)
+}
+
+// SearchBasicLocked: caller must hold s.mu read lock.
+func (s *Store) SearchBasicLocked(query string, budget, k int) []Hit {
 	qt := tok(query)
 	qv := vecForQuery(query)
 	ay := afterYear(query)

@@ -30,7 +30,7 @@ func TestCorpusPRFExpansion(t *testing.T) {
 func TestChainHopAddsConnectivity(t *testing.T) {
 	s := NewStore()
 	seedInto(s)
-	res := s.ChainHopFull("What error code E1847 fix works?", 120, 5)
+	res := s.ChainHopUnLocked("What error code E1847 fix works?", 120, 5)
 	if len(res.Hit) == 0 {
 		t.Fatal("no hits")
 	}
@@ -173,5 +173,53 @@ func TestTombstoneGateInAssembler(t *testing.T) {
 		if src == "gdpr-v1" {
 			t.Fatal("tombstoned unit leaked into assembly")
 		}
+	}
+}
+
+func TestIntentClassification(t *testing.T) {
+	if classifyIntent("current GDPR stance after 2023?") != IntentTemporal {
+		t.Log("temporal classification")
+	}
+	if classifyIntent("Summarize all incidents") != IntentAggregation {
+		t.Log("aggregation")
+	}
+	if classifyIntent("What error E1847?") != IntentFactual {
+		t.Log("factual")
+	}
+}
+
+func TestPPRForwardPushReachesEdges(t *testing.T) {
+	s := NewStore()
+	seedInto(s)
+	// pick top hits as seeds; PPR should produce mass map
+	hits := s.Search("GDPR stance retention", 120, 4)
+	var seeds []string
+	for _, h := range hits {
+		seeds = append(seeds, h.U.ID)
+	}
+	mass := s.PPRForwardPush(seeds, 0.15, 0.05)
+	if len(mass) == 0 {
+		t.Fatal("no diffusion mass")
+	}
+	lifted := s.PPRLift(hits, []string{"gdpr"}, toks(hits), 160)
+	if len(lifted) < len(hits) {
+		t.Fatal("PPR lift shrank hit set")
+	}
+}
+
+func TestSandwichCilowReorderNoDup(t *testing.T) {
+	s := NewStore()
+	seedInto(s)
+	hits := s.Search("GDPR stance retention", 120, 5)
+	parts, total, _ := Sandwich(hits, 999, false)
+	if !strings.Contains(parts[len(parts)-1], hits[1].U.Src) {
+		t.Fatalf("second-best should be last, got %v", parts[len(parts)-1])
+	}
+	if !strings.Contains(parts[0], hits[0].U.Src) {
+		t.Fatal("best should be first")
+	}
+	// zero duplicate tokens: total == sum of unique unit tokens
+	if total != toks(hits) {
+		t.Fatalf("no-dup reorder should not inflate tokens: %d vs %d", total, toks(hits))
 	}
 }

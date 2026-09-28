@@ -228,6 +228,15 @@ sqlite WAL roundtrip 16-38ms, 12x smaller (94KB), durable
 Default = JSON snapshot (fastest, no deps). STORE_PATH + STORE_KIND=sqlite for durable envs.
 ```
 
+### v2.2: Cilow-audit mechanisms integrated (Sept 2026)
+From the Cilow engine audit, four additions measured and wired without regressing any gate:
+| Mechanism | Status | Evidence |
+|-----------|--------|----------|
+| **Entity-seeded PPR forward-push** (Andersen-Chung-Lang) | wired into ChainHop round-2 | bench unchanged (PASS), 125q tok stable 213 |
+| **Conformal abstention** (Angelopoulos-Bates, per-intent alpha) | live: `X-Intent` + `X-Conformal-Nc` + `X-Abstain` headers; abstains only when nonconformity > q-hat 0.95 | verified live (0.252 temporal, no false-abstain) |
+| **Cilow/Liu exact edge reorder** (best first, second-best LAST, zero duplicate tokens) | live packer mode (`SANDWICH!=0` legacy dup, default now no-dup reorder) | needle live PASS |
+| **Intent classification** (Factual/Temporal/Preference/Aggregation) | live | X-Intent=1 temporal verified |
+
 ### Serving: auth + namespaces + metrics
 ```bash
 TOKEN=secret go run . serve

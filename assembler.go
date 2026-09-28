@@ -18,21 +18,47 @@ type Assembled struct {
 	Sources []string
 }
 
-// Sandwich packs hits into a budget with edge placement.
-// Order: [best] [next...] [others by score desc] [duplicate of best, if budget allows]
+// Sandwich packs hits into a budget with edge placement. Two modes:
+// duplicate=false (Cilow/Liu et al. exact reorder, ZERO duplicate tokens):
+//
+//	[best] [mid...] [second-best last]
+//
+// duplicate=true (v1.1 legacy best-duplication):
+//
+//	[best] [mid...] [duplicate of best]
 func Sandwich(hits []Hit, budget int, duplicateBest bool) (parts []string, total int, srcs []string) {
 	if len(hits) == 0 {
 		return nil, 0, nil
 	}
+	if !duplicateBest && len(hits) >= 2 {
+		best, second := hits[0], hits[1]
+		parts = append(parts, ed(best))
+		total += best.U.Ntok
+		srcs = append(srcs, best.U.Src)
+		for _, h := range hits[2:] {
+			if total+h.U.Ntok > budget-best.U.Ntok-second.U.Ntok {
+				continue
+			}
+			parts = append(parts, ed(h))
+			total += h.U.Ntok
+			srcs = append(srcs, h.U.Src)
+		}
+		if total+second.U.Ntok <= budget {
+			parts = append(parts, ed(second))
+			total += second.U.Ntok
+			srcs = append(srcs, second.U.Src)
+		}
+		return parts, total, srcs
+	}
 	best := hits[0]
 	srcs = append(srcs, best.U.Src)
-	parts = append(parts, fmt.Sprintf("- [%s %s] %s", best.U.Src, best.U.ID, best.U.Text))
+	parts = append(parts, ed(best))
 	total += best.U.Ntok
 	for _, h := range hits[1:] {
 		if total+h.U.Ntok > budget-reserveFor(duplicateBest, best.U.Ntok) {
 			break
 		}
-		parts = append(parts, fmt.Sprintf("- [%s %s] %s", h.U.Src, h.U.ID, h.U.Text))
+		parts = append(parts, ed(h))
 		total += h.U.Ntok
 		srcs = append(srcs, h.U.Src)
 	}
@@ -41,6 +67,10 @@ func Sandwich(hits []Hit, budget int, duplicateBest bool) (parts []string, total
 		total += best.U.Ntok
 	}
 	return parts, total, srcs
+}
+
+func ed(h Hit) string {
+	return fmt.Sprintf("- [%s %s] %s", h.U.Src, h.U.ID, h.U.Text)
 }
 
 func coverageGate(h *Hit, s *Store) bool {

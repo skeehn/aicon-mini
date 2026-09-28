@@ -65,6 +65,14 @@ One-liner: One endpoint. Every optimization. Hard caps. Proof in dollars.
 - tests v2_test.go: 9 v2 tests PASS; race fixes via ChainHop RLock (Search -> ChainHop wrapper)
 - go get modernc.org/sqlite@v1.59.0
 
+## v2.2 CILOW-AUDIT MECHANISMS (2026-09-24)
+- cilow.go: intent classify + alphaFor per-intent + PPR forward-push (ACL) + PPRLift with budget cap
+- assembler.go exact edge reorder (no-dup, best first + second-best LAST) default mode
+- api.go: X-Intent / X-Conformal-Nc / X-Abstain; conformal abstain response when nc>0.95
+- DEADLOCK FOUND+FIXED: Go RWMutex nested RLock + pending writer = block; split SearchBasicLocked/ChainHopUnLocked; race test 80s PASS
+- bencheval still PASS n=125 (0.976/0.976/0.976); needlelive PASS; taskeval PASS (MRR 0.875)
+- source: ~/Desktop/CILOW_MASTER_ENGINE_AUDIT.md (claims CoAccess feedback + assembly receipts next)
+
 ## NEXT STEPS (production-grade queue)
 1. Rotate Jina+Cohere keys (USER)
 2. Real vLLM backend: Complete() -> OpenAI-compatible POST (H100 pod)

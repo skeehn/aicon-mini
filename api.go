@@ -135,6 +135,15 @@ func (ap *API) handleChat(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx, srcs, ctxTok := ap.buildContext(req.SessionID, userQ, req.MaxContext)
 	injectionMs := float64(time.Since(start).Microseconds()) / 1000
+	intent := classifyIntent(userQ)
+	nc := conformalNonconformity(1, minFloat(1.0, float64(len(srcs))/8.0), intent)
+	abstain := nc > conformalAlpha()*nc0()
+	hdr := w.Header()
+	hdr.Set("X-Intent", fmt.Sprint(int(intent)))
+	hdr.Set("X-Conformal-Nc", fmt.Sprintf("%.3f", nc))
+	if abstain {
+		hdr.Set("X-Abstain", "1")
+	}
 
 	if req.SessionID != "" {
 		ap.sessions.AddTurn(req.SessionID, "user", userQ)
@@ -158,7 +167,19 @@ func (ap *API) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	var resp ChatResponse
 	var upstreamBytes []byte
-	hdr := w.Header()
+	if abstain && ap.upstream == "" {
+		resp := ChatResponse{
+			ID:      "chatcmpl-aicon-abstain-" + fmt.Sprint(time.Now().UnixNano()),
+			Object:  "chat.completion",
+			Created: time.Now().Unix(),
+			Model:   model,
+			Choices: []ChatChoice{{Index: 0, Message: ChatMessage{Role: "assistant", Content: "I cannot answer that from memory. Ingest the relevant docs and retry."}, FinishReason: "stop"}},
+			Usage:   map[string]int{"prompt_tokens": 0, "completion_tokens": 14, "total_tokens": 14},
+		}
+		hdr.Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
 	if ap.upstream != "" {
 		forward := map[string]interface{}{
 			"model":       model,
@@ -308,4 +329,11 @@ func RunHTTPServer(addr string) {
 		fmt.Fprintln(os.Stderr, "server:", err)
 		os.Exit(1)
 	}
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -19,15 +19,14 @@ type ChainHopResult struct {
 func (s *Store) ChainHop(query string, budget, k int) []Hit {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	res := s.ChainHopFull(query, budget, k)
+	res := s.ChainHopUnLocked(query, budget, k)
 	return res.Hit
 }
 
-func (s *Store) ChainHopFull(query string, budget, k int) ChainHopResult {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// ChainHopUnLocked: caller must hold the store read lock; no nested RLocks.
+func (s *Store) ChainHopUnLocked(query string, budget, k int) ChainHopResult {
 	out := ChainHopResult{Verifier: map[string]bool{}}
-	res0 := s.SearchBasic(query, budget, k)
+	res0 := s.SearchBasicLocked(query, budget, k)
 	out.Hit = res0
 	if len(res0) == 0 {
 		return out
@@ -126,6 +125,8 @@ func (s *Store) ChainHopFull(query string, budget, k int) ChainHopResult {
 		final = append(final, h)
 		used += h.U.Ntok
 	}
+	// Cilow prong: entity-seeded PPR diffusion as final multi-hop unlock
+	final = s.PPRLift(final, qtExp(q1), toks(final), budget)
 	out.Hit = final
 	return out
 }
@@ -136,3 +137,5 @@ func minInt(a, b int) int {
 	}
 	return b
 }
+
+func qtExp(q string) []string { return tok(q) }
