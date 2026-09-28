@@ -139,11 +139,20 @@ func (ap *API) handleChat(w http.ResponseWriter, r *http.Request) {
 	nc := conformalNonconformity(1, minFloat(1.0, float64(len(srcs))/8.0), intent)
 	abstain := nc > conformalAlpha()*nc0()
 	hdr := w.Header()
-	hdr.Set("X-Intent", fmt.Sprint(int(intent)))
+	hdr.Set("X-Intent", intentName(intent))
 	hdr.Set("X-Conformal-Nc", fmt.Sprintf("%.3f", nc))
 	if abstain {
 		hdr.Set("X-Abstain", "1")
 	}
+	// assembly receipt - full provenance object + X-Receipt short header
+	rec := &Receipt{
+		ID: newReceiptID(), Query: userQ, Units: len(srcs),
+		Sources: srcs, Tokens: ctxTok, Intent: intentName(intent),
+		ConformalNC: nc, Abstain: abstain, Hops: 1,
+	}
+	receipts.Put(rec)
+	hdr.Set("X-Receipt", rec.Hash)
+	hdr.Set("X-Receipt-Hops", fmt.Sprint(rec.Hops))
 
 	if req.SessionID != "" {
 		ap.sessions.AddTurn(req.SessionID, "user", userQ)
@@ -292,6 +301,21 @@ func RunHTTPServer(addr string) {
 	mux.HandleFunc("/health", ap.handleHealth)
 	mux.HandleFunc("/v1/chat/completions", metricsWrap(ap.handleChat))
 	mux.HandleFunc("/ingest", metricsWrapIngest(ap.handleIngest))
+	mux.HandleFunc("/receipt/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/receipt/")
+		if rc, ok := receipts.Get(id); ok {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(rc)
+			return
+		}
+		http.Error(w, "404 receipt not found", http.StatusNotFound)
+	})
+	mux.HandleFunc("/receipts", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		for _, rc := range receiptsList() {
+			fmt.Fprintln(w, rc.Short())
+		}
+	})
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		w.Write([]byte(renderMetrics(metrics.snapshot())))

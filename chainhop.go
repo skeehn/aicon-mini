@@ -7,6 +7,7 @@ package main
 import (
 	"math"
 	"sort"
+	"sync/atomic"
 )
 
 type ChainHopResult struct {
@@ -18,8 +19,14 @@ type ChainHopResult struct {
 
 func (s *Store) ChainHop(query string, budget, k int) []Hit {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	res := s.ChainHopUnLocked(query, budget, k)
+	s.mu.RUnlock()
+	if s.CoAcc != nil && len(res.Hit) >= 2 {
+		s.mu.Lock()
+		s.CoAcc.Feed(res.Hit, s)
+		s.mu.Unlock()
+	}
+	atomic.AddInt64(&s.Acct, 1)
 	return res.Hit
 }
 

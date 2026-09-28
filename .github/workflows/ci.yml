@@ -29,6 +29,7 @@ jobs:
       - run: go run . bencheval
       - run: go run . needle
       - run: go run . needlelive
+      - run: go run . sessstress
 
       # coverage
       - run: go tool cover -func=cover.out | grep total

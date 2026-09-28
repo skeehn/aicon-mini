@@ -9,23 +9,36 @@ import (
 )
 
 type snapshot struct {
-	Version int               `json:"version"`
-	U       []*Unit           `json:"units"`
-	Adj     map[string][]Rel  `json:"adj"`
-	Tomb    map[string]bool   `json:"tomb"`
-	Sup     map[string]string `json:"sup"`
+	Version    int               `json:"version"`
+	U          []*Unit           `json:"units"`
+	Adj        map[string][]Rel  `json:"adj"`
+	Tomb       map[string]bool   `json:"tomb"`
+	Sup        map[string]string `json:"sup"`
+	ConflictID map[string]bool   `json:"conflicts,omitempty"`
+	ConflictR  map[string]string `json:"conflict_reasons,omitempty"`
 }
 
 func (s *Store) Save(path string) error {
 	if path == "" {
 		path = "store.json"
 	}
+	conf := map[string]bool{}
+	confR := map[string]string{}
+	if s.Conflicts != nil {
+		for k, v := range s.Conflicts.Active {
+			conf[k] = v
+		}
+		for k, v := range s.Conflicts.Reasons {
+			confR[k] = v
+		}
+	}
 	snap := snapshot{
-		Version: 1,
-		U:       s.U,
-		Adj:     s.Adj,
-		Tomb:    s.Tomb,
-		Sup:     s.Sup,
+		Version:    1,
+		U:          s.U,
+		Adj:        s.Adj,
+		Tomb:       s.Tomb,
+		Sup:        s.Sup,
+		ConflictID: conf, ConflictR: confR,
 	}
 	b, err := json.MarshalIndent(snap, "", " ")
 	if err != nil {
@@ -56,6 +69,13 @@ func LoadStore(path string) (*Store, error) {
 	}
 	if s.Sup == nil {
 		s.Sup = map[string]string{}
+	}
+	s.Conflicts = NewConflictRegistry()
+	for k := range snap.ConflictID {
+		s.Conflicts.Active[k] = true
+	}
+	for k, v := range snap.ConflictR {
+		s.Conflicts.Reasons[k] = v
 	}
 	for _, u := range s.U {
 		s.ByID[u.ID] = u

@@ -30,16 +30,19 @@ type Rel struct {
 	W       float64
 }
 type Store struct {
-	Assoc *AssocIdx
-	mu    sync.RWMutex
-	U     []*Unit
-	ByID  map[string]*Unit
-	DF    map[string]int
-	Avg   float64
-	Adj   map[string][]Rel
-	Tomb  map[string]bool
-	Sup   map[string]string
-	N     int
+	Assoc     *AssocIdx
+	CoAcc     *CoAccess
+	Conflicts *ConflictRegistry
+	Acct      int64
+	mu        sync.RWMutex
+	U         []*Unit
+	ByID      map[string]*Unit
+	DF        map[string]int
+	Avg       float64
+	Adj       map[string][]Rel
+	Tomb      map[string]bool
+	Sup       map[string]string
+	N         int
 }
 type Hit struct {
 	U     *Unit
@@ -48,7 +51,7 @@ type Hit struct {
 }
 
 func NewStore() *Store {
-	return &Store{ByID: map[string]*Unit{}, DF: map[string]int{}, Adj: map[string][]Rel{}, Tomb: map[string]bool{}, Sup: map[string]string{}, Assoc: NewAssocIdx()}
+	return &Store{ByID: map[string]*Unit{}, DF: map[string]int{}, Adj: map[string][]Rel{}, Tomb: map[string]bool{}, Sup: map[string]string{}, Assoc: NewAssocIdx(), CoAcc: NewCoAccess(), Conflicts: NewConflictRegistry()}
 }
 
 func (s *Store) AssocPool() *AssocIdx  { return s.Assoc }
@@ -101,6 +104,9 @@ func (s *Store) rankCombined(query string, budget, k int) []Hit {
 	var all []Hit
 	for id, f := range rrf {
 		u := s.ByID[id]
+		if s.Conflicts != nil && s.Conflicts.Active[id] {
+			continue
+		}
 		all = append(all, Hit{u, f * 100, "combined"})
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Score > all[j].Score })
@@ -218,6 +224,21 @@ func (s *Store) ingestLocked(src, text, prov string, t int64) []string {
 	for _, c := range cs {
 		tk := tok(c)
 		id := cid(src, c, t)
+		if s.ResolveWrite(src, c, prov) {
+			if s.Conflicts == nil {
+				s.Conflicts = NewConflictRegistry()
+			}
+			s.Conflicts.Active[id] = true
+			s.Conflicts.Reasons[id] = "exclusive-channel content mismatch"
+			for _, eu := range s.U {
+				if eu.Src == src && eu.ID != id && !s.Tomb[eu.ID] {
+					s.Conflicts.Pairs = append(s.Conflicts.Pairs, [2]string{eu.ID, id})
+					break
+				}
+			}
+			ids = append(ids, id)
+			continue
+		}
 		if _, ok := s.ByID[id]; ok {
 			ids = append(ids, id)
 			prev = id
@@ -383,6 +404,9 @@ func (s *Store) SearchBasicLocked(query string, budget, k int) []Hit {
 		if !alive(u) {
 			continue
 		}
+		if s.Conflicts != nil && s.Conflicts.Active[u.ID] {
+			continue
+		}
 		rsb = append(rsb, rs{u, s.bm25(qt, u), 0})
 		rsd = append(rsd, rs{u, 0, cos(qv, u.Vec)})
 	}
@@ -471,6 +495,9 @@ func (s *Store) SearchBasicLocked(query string, budget, k int) []Hit {
 	var all []Hit
 	for id, f := range rrf {
 		u := s.ByID[id]
+		if s.Conflicts != nil && s.Conflicts.Active[id] {
+			continue
+		}
 		ov := 0.0
 		set := map[string]bool{}
 		for _, w := range u.Tok {
@@ -812,6 +839,9 @@ func main() {
 	}
 	if arg == "needlelive" {
 		os.Exit(runNeedleLive())
+	}
+	if arg == "sessstress" {
+		os.Exit(runSessStress())
 	}
 	if arg == "persistbench" {
 		os.Exit(runPersistBench())

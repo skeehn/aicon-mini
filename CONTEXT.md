@@ -73,6 +73,16 @@ One-liner: One endpoint. Every optimization. Hard caps. Proof in dollars.
 - bencheval still PASS n=125 (0.976/0.976/0.976); needlelive PASS; taskeval PASS (MRR 0.875)
 - source: ~/Desktop/CILOW_MASTER_ENGINE_AUDIT.md (claims CoAccess feedback + assembly receipts next)
 
+## v2.3 SELF-IMPROVING MEMORY + TRUTH ALGEBRA + RECEIPTS (2026-09-28)
+- coaccess.go: same-P5 co-recall edges (w=0.85-distance/2, cap 3/unit); feeds graph after EVERY successful search; feeds now atomic
+- truth.go: Cilow conflict op - exclusive channels (policy/db/compliance) same-src-diff-content=Conflict; flagged units EXCLUDED from rank+pack, inspectable
+- receipts.go: full receipt per query {units, sources, tokens, intent, conformal-nc, ppr, hops, why, hash}; GET /receipt/:id + /receipts list; X-Receipt hash header
+- DEADLOCK fixed: CoAcc.Feed was mutating s.Adj under RLock -> moved Feed to post-RUnlock critical section under write lock; Acct atomic
+- DETERMINISM fixed: PPR mass map iteration order randomized result order -> sorted by mass desc
+- tests: TestCoAccessSelfImproving, TestConflictExclusiveChannel, TestReceiptFlow, TestIntentClassification, TestPPRForwardPushReachesEdges, TestSandwichCilowReorderNoDup PASS
+- sessstress gate: MRR 0.917 no-regress, coaccess edges 36->72->97, feeds=36
+- All gates PASS: bencheval(0.976/0.976/0.976 containment), taskeval(MRR .875), needlelive, sessstress, vet, race 34s
+
 ## NEXT STEPS (production-grade queue)
 1. Rotate Jina+Cohere keys (USER)
 2. Real vLLM backend: Complete() -> OpenAI-compatible POST (H100 pod)

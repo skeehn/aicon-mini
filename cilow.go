@@ -138,9 +138,23 @@ func (s *Store) PPRLift(hits []Hit, qt []string, usedTok int, budget int) []Hit 
 	for _, h := range hits {
 		have[h.U.ID] = true
 	}
-	minHit := hits[len(hits)-1].Score
-	bonus := minHit * 0.95
+	type ms struct {
+		id string
+		m  float64
+	}
+	var mslice []ms
 	for id, m := range mass {
+		mslice = append(mslice, ms{id, m})
+	}
+	for i := 0; i < len(mslice); i++ {
+		for j := i + 1; j < len(mslice); j++ {
+			if mslice[j].m > mslice[i].m {
+				mslice[i], mslice[j] = mslice[j], mslice[i]
+			}
+		}
+	}
+	for _, entry := range mslice {
+		id, m := entry.id, entry.m
 		if have[id] {
 			continue
 		}
@@ -160,8 +174,6 @@ func (s *Store) PPRLift(hits []Hit, qt []string, usedTok int, budget int) []Hit 
 		}
 		hits = append(hits, Hit{U: u, Score: scale * 0.6 * (m / maxMass), Why: "ppr-reach"})
 	}
-	_ = bonus
-	_ = minHit
 	return hits
 }
 

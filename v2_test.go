@@ -223,3 +223,43 @@ func TestSandwichCilowReorderNoDup(t *testing.T) {
 		t.Fatalf("no-dup reorder should not inflate tokens: %d vs %d", total, toks(hits))
 	}
 }
+
+func TestCoAccessSelfImproving(t *testing.T) {
+	s := NewStore()
+	seedInto(s)
+	feeds0 := s.CoAcc.Feeds
+	for i := 0; i < 3; i++ {
+		s.Search("GDPR stance retention", 120, 5)
+	}
+	if s.CoAcc.Feeds <= feeds0 {
+		t.Fatalf("coaccess did not feed: %d", s.CoAcc.Feeds)
+	}
+}
+
+func TestConflictExclusiveChannel(t *testing.T) {
+	s := NewStore()
+	s.Ingest("conflict-src", "Vacation days are 25 per year.", "policy", 2026)
+	before := len(s.U)
+	s.Ingest("conflict-src", "Vacation days are 30 per year.", "policy", 2026)
+	if len(s.Conflicts.Pairs) == 0 {
+		t.Fatal("no conflict pair recorded")
+	}
+	// conflicted unit must never appear in retrieval top results
+	hits := s.Search("vacation days", 120, 5)
+	for _, h := range hits {
+		if s.Conflicts.Active[h.U.ID] {
+			t.Fatalf("conflicted unit %s leaked into pack", h.U.ID)
+		}
+	}
+	_ = before
+}
+
+func TestReceiptFlow(t *testing.T) {
+	r := &Receipt{ID: newReceiptID(), Query: "q", Units: 3, Sources: []string{"a"},
+		Tokens: 10, Intent: "factual", ConformalNC: 0.3, Hops: 1}
+	receipts.Put(r)
+	got, ok := receipts.Get(r.ID)
+	if !ok || got.Hash == "" {
+		t.Fatal("receipt hash not filled")
+	}
+}
